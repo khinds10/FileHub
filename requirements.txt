@@ -1,0 +1,5 @@
+# Install via apt: sudo apt install python3-watchdog python3-paramiko python3-mysql.connector
+# This file is for reference only - use system package manager
+watchdog>=3.0.0
+paramiko>=2.0.0
+mysql-connector-python>=8.0.0
