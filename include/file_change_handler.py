@@ -151,6 +151,10 @@ class FileChangeHandler(FileSystemEventHandler):
             file_size = self.get_file_size(file_path) if file_path else None
             self.db_manager.queue_operation('log', event_type, file_path, old_path, new_path, 
                                           file_size, is_text, 'PENDING')
+            
+            # Save file version for text files on creation or modification
+            if is_text and event_type in ['CREATED', 'MODIFIED'] and file_path:
+                self.db_manager.queue_operation('save_version', file_path)
     
     def on_created(self, event):
         """Handle file creation events."""

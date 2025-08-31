@@ -11,7 +11,7 @@ A Python service that monitors a folder for file changes and outputs them to sta
 
 ```
 File-Service/
-├── file_monitor.py      # Main monitoring and sync service
+├── file_monitor.py      # Unified service (monitor + version management)
 ├── include/             # Modular class components
 │   ├── database_manager.py    # MySQL database operations
 │   ├── sftp_manager.py        # SFTP connection and sync

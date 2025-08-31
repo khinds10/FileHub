@@ -10,6 +10,7 @@ import sys
 import json
 import threading
 import queue
+import hashlib
 from pathlib import Path
 from datetime import datetime
 
@@ -95,7 +96,24 @@ class DatabaseManager:
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """
             
+            # File versions table for text file content
+            create_versions_query = """
+            CREATE TABLE IF NOT EXISTS file_versions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                file_path VARCHAR(1000) NOT NULL,
+                version_timestamp DATETIME NOT NULL,
+                file_content LONGTEXT NULL,
+                file_size BIGINT NOT NULL,
+                checksum VARCHAR(64) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_file_path (file_path(255)),
+                INDEX idx_version_timestamp (version_timestamp),
+                INDEX idx_file_path_timestamp (file_path(255), version_timestamp)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+            
             cursor.execute(create_table_query)
+            cursor.execute(create_versions_query)
             print("✅ Database tables created/verified")
             
         except Error as e:
@@ -188,6 +206,8 @@ class DatabaseManager:
                     self.log_activity(*args)
                 elif op_type == 'update_sync':
                     self.update_sync_status(*args)
+                elif op_type == 'save_version':
+                    self.save_file_version(*args)
                 
                 self.operation_queue.task_done()
                 
@@ -195,6 +215,93 @@ class DatabaseManager:
                 continue
             except Exception as e:
                 print(f"❌ Database worker error: {e}")
+    
+    def save_file_version(self, file_path, file_content=None):
+        """Save a version of a text file to the database."""
+        try:
+            if not file_content and os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    file_content = f.read()
+            
+            if file_content:
+                file_size = len(file_content.encode('utf-8'))
+                checksum = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
+                
+                cursor = self.connection.cursor()
+                query = """
+                INSERT INTO file_versions 
+                (file_path, version_timestamp, file_content, file_size, checksum)
+                VALUES (%s, %s, %s, %s, %s)
+                """
+                
+                values = (
+                    file_path,
+                    datetime.now(),
+                    file_content,
+                    file_size,
+                    checksum
+                )
+                
+                cursor.execute(query, values)
+                print(f"💾 Version saved: {file_path} ({file_size} bytes)")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Error saving file version: {e}")
+            return False
+    
+    def get_file_versions(self, file_path, limit=10):
+        """Get recent versions of a file."""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            query = """
+            SELECT id, version_timestamp, file_size, checksum, created_at
+            FROM file_versions 
+            WHERE file_path = %s 
+            ORDER BY version_timestamp DESC 
+            LIMIT %s
+            """
+            
+            cursor.execute(query, (file_path, limit))
+            return cursor.fetchall()
+            
+        except Exception as e:
+            print(f"❌ Error getting file versions: {e}")
+            return []
+    
+    def restore_file_version(self, version_id, target_path=None):
+        """Restore a file to a specific version."""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            query = """
+            SELECT file_path, file_content 
+            FROM file_versions 
+            WHERE id = %s
+            """
+            
+            cursor.execute(query, (version_id,))
+            result = cursor.fetchone()
+            
+            if result:
+                file_path = target_path or result['file_path']
+                file_content = result['file_content']
+                
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                
+                # Write file content
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(file_content)
+                
+                print(f"🔄 Restored: {file_path} (version {version_id})")
+                return True
+            else:
+                print(f"❌ Version {version_id} not found")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error restoring file version: {e}")
+            return False
     
     def queue_operation(self, op_type, *args):
         """Queue a database operation for background processing."""

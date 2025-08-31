@@ -1,12 +1,12 @@
 [Unit]
-Description=File Monitor Service
+Description=Unified File Service - Monitor and Version Management
 After=network.target
 
 [Service]
 Type=simple
 User=your_username
 WorkingDirectory=/home/khinds/FileHub
-ExecStart=/usr/bin/python3 /home/khinds/Dropbox/Devices/Workstation/File-Service/file_monitor.py /path/to/watch --recursive --config /home/khinds/Dropbox/Devices/Workstation/File-Service/config.json
+ExecStart=/usr/bin/python3 /home/khinds/Dropbox/Devices/Workstation/File-Service/file_monitor.py monitor /path/to/watch --recursive --config /home/khinds/Dropbox/Devices/Workstation/File-Service/config.json
 Restart=always
 RestartSec=10
 StandardOutput=journal
